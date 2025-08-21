@@ -4,15 +4,7 @@ esphome:
   project:
     name: grahamsz.openshrooly
     version: 0.0.0-dev
-  on_boot:
-    priority: -10
-    then:
-      - light.turn_on:
-          id: rgb_led_strip
-          brightness: 100%
-          red: 100%
-          green: 0%
-          blue: 0%
+
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -31,33 +23,36 @@ ota:
 # First-run: start as hotspot; user configures Wi-Fi via captive portal
 wifi:
   ap:
-    ssid: "Shrooly Setup"     # no password for easiest onboarding; add later if desired
+    ssid: "OpenShrooly"     # no password for easiest onboarding; add later if desired
 captive_portal:
 
 web_server:
   port: 80
+  version: 3
 
+# I2C bus configuration
+# Used for SHT41 sensor, MCP7940N RTC, and humidifier control (also probably water level sensor)
 i2c:
   sda: GPIO36
   scl: GPIO35
   scan: true
   id: bus_a
 
-# -------------------------
-# PWM White LED Strip on IO39
-# -------------------------
+
 output:
+  # White LED strip (PWM-brightness control on GPIO39)
   - platform: ledc
     pin: GPIO39
     id: white_led_pwm
     inverted: true
 
-  # Air exchange fan (PWM)
+  # Air exchange fan (PWM-speed control on GPIO37)
   - platform: ledc
     pin: GPIO37
     id: fan_pwm
     inverted: true
 
+# Create two light entities
 light:
   - platform: monochromatic
     output: white_led_pwm
@@ -78,11 +73,12 @@ light:
       - addressable_scan:
       - addressable_twinkle:
 
+# Humidifier control via I2C commands
 switch:
   - platform: template
     name: "Humidifier Fan"
     id: humidifier_fan
-    optimistic: true
+    optimistic: true  # Assume the switch state is always correct, because there doesn't seem to be I2C feedback
     turn_on_action:
       - lambda: |-
           uint8_t data[2] = {0x00, 0x01};
@@ -94,6 +90,7 @@ switch:
           bool ok = id(bus_a).write(0x6C, data, 2);
           ESP_LOGI("humidifier", "TURN OFF: sent [0x00,0x00] to 0x6C, ok=%d", ok);
 
+# Air exchange fan control via PWM output
 fan:
   - platform: speed
     output: fan_pwm
@@ -103,35 +100,21 @@ sensor:
   - platform: sht4x
     i2c_id: bus_a
     temperature:
-      name: "SHT41 Temperature"
+      name: "Temperature"
     humidity:
-      name: "SHT41 Humidity"
+      name: "Humidity"
     update_interval: 30s
 
   - platform: pulse_counter
     pin: GPIO14
-    name: "Fan Tachometer"
+    name: "Air Exchange Fan Speed"
     id: fan_tach
     unit_of_measurement: "RPM"
     accuracy_decimals: 0
     filters:
-      - multiply: 0.5
+      - multiply: 0.5 #This seems to scale consistently with the displayed values in the Shrooly self-test
     update_interval: 1s
 
-  - platform: template
-    name: "I2C Byte from 0x36"
-    id: i2c_byte_36
-    unit_of_measurement: "val"
-    accuracy_decimals: 0
-    update_interval: 5s
-    lambda: |-
-      uint8_t data;
-      if (id(bus_a).read(0x36, &data, 1)) {
-        return (float)data;
-      } else {
-        ESP_LOGW("i2c_byte_36", "Failed to read from 0x36");
-        return NAN;
-      }
 
 time:
   - platform: ds1307

@@ -67,16 +67,28 @@ These steps assume Linux. On Windows your port may look like `COM3`, on macOS it
 
 3. **First boot**  
    - After flashing, the device will create a Wi-Fi access point:  
-     **SSID:** `Shrooly Setup`  
-   - Connect to this AP and a **captive portal** will let you enter your home Wi-Fi details.  
-   - Once configured, it will reboot and join your network.
+     **SSID:** `OpenShrroly`  
+   - Connect to this AP and browse to http://192.168.4.1 and you can enter your home WiFi details
+   - Once configured, it will reboot and join your network. 
+   - Access the built-in web interface at the Shrooly’s IP on your LAN.  You might be able to use `http://shrooly` or `http://shrooly.local` if mDns works on your home network, otherwise you might have to look in your router's DHCP allocations to find the address
+
+<img width="975" height="1403" alt="image" src="https://github.com/user-attachments/assets/63dbbed0-dc08-4b18-aca1-c779fbf2dcf4" />
 
 ---
 
-## Next Steps
+## Next development steps
 
-- Access the built-in web interface at the Shrooly’s IP on your LAN.  You might be able to use `http://shrooly` or `http://shrooly.local` if mDns works on your home network, otherwise you might have to look in your router's DHCP allocations to find the address
-- Experiment with sensors, lights. Automation is coming soon
+- Allow set up of custom cultivation program with on/off times, target humidity, custom light levels
+- Tune a [PID](https://en.wikipedia.org/wiki/Proportional%E2%80%93integral%E2%80%93derivative_controller) to allow more stable humidity control than the Shrooly does currently. (I expect this will reduce condensation)
+- Provide instructions for integrating with Home Assistant, which in turn would allow the use of a smart plug and heating mat to maintain a stable temperature.
+- Figure out how to port across the existing cultivation programs that shrooly has
+- Maybe make the water sensor work. I have some notes about how it communicates with I2C but haven't been able to figure out why ESPHome isn't working
+
+
+## Things I don't plan to do
+
+ - Build a physical interface to allow control via the buttons and eInk screen. This is hypothetically possible - we'd need to figure out the pins for the SPI eInk interface and then ESPHome should be quite able to drive it
+ - Anything with bluetooth or the original Shrooly app
 
 ---
 
