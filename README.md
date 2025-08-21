@@ -12,13 +12,7 @@ Presently this is only a proof of concept. It can control the lights/fans and mo
 
 ## Prerequisites
 
-Before flashing, install the following tools:
-
-- **ESPHome** (for building firmware):  
-  [ESPHome installation guide](https://esphome.io/guides/installing_esphome.html)
-
-- **Home Assistant** (optional, for integration):  
-  [Home Assistant installation guide](https://www.home-assistant.io/installation/)
+Before flashing, install the following tool:
 
 - **esptool.py** (for backing up and flashing):  
   [esptool documentation](https://docs.espressif.com/projects/esptool/en/latest/)  
