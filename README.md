@@ -67,8 +67,9 @@ These steps assume Linux. On Windows your port may look like `COM3`, on macOS it
 
 3. **First boot**  
    - After flashing, the device will create a Wi-Fi access point:  
-     **SSID:** `OpenShrroly`  
+     **SSID:** `OpenShrooly`  
    - Connect to this AP and browse to http://192.168.4.1 and you can enter your home WiFi details
+   - (Sometimes ESP home boots up and fails to start it's DHCP server, power cycling sometimes helpes here or you can connect with a static IP like 192.168.4.2)
    - Once configured, it will reboot and join your network. 
    - Access the built-in web interface at the Shrooly’s IP on your LAN.  You might be able to use `http://shrooly` or `http://shrooly.local` if mDns works on your home network, otherwise you might have to look in your router's DHCP allocations to find the address
 
