@@ -63,7 +63,7 @@ These steps assume Linux. On Windows your port may look like `COM3`, on macOS it
    Get the latest development build:  
    [OpenShrooly dev-latest release](https://github.com/grahamsz/openshrooly/releases/tag/dev-latest)
 
-   Download `shrooly.factory.bin` (or `shrooly.ota.bin` if updating from ESPHome/OTA).
+   Download `shrooly.factory.bin` (The `shrooly.ota.bin` is only useful if you are runnnig an earlier OpenShrooly build).
 
 2. **Flash with esptool**  
    Example:
