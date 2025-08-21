@@ -20,7 +20,8 @@ jobs:
           yaml-file: esphome/openshrooly.yaml
           complete-manifest: true
           release-summary: "Dev build from ${{ github.ref }} @ ${{ github.sha }}"
-          # version: "pin-ESPHOME-if-you-want"
+          version: "2024.11.3"
+          
 
       - name: Tag dev-latest
         run: |
