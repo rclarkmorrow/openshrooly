@@ -1,7 +1,9 @@
-# OpenShrooly
+<img width="256" height="75 alt="image" src="https://github.com/user-attachments/assets/9fa4725c-00c0-42ce-ba5d-a9dcd2bbc7c9" />
 
 **OpenShrooly** is a very early experimental replacement firmware for the Shrooly mushroom growing device.  
 The intent is to convert the Shrooly into a **Wi-Fi–only device**, controllable from a local web interface or integrated with [Home Assistant](https://www.home-assistant.io/).
+
+Presently this is only a proof of concept. It can control the lights/fans and monitor the temperature and humidity but it's not ready for actually growing mushrooms with.
 
 ⚠️ **Warning:** Use at your own risk! This project is experimental and may brick your device.
 
