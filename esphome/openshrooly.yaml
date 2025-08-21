@@ -68,6 +68,7 @@ light:
     pin: GPIO42
     num_leds: 16
     chipset: ws2812
+    rmt_channel: 0
     rgb_order: RGB
     effects:
       - random:
