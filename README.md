@@ -75,7 +75,7 @@ These steps assume Linux. On Windows your port may look like `COM3`, on macOS it
 
 ## Next Steps
 
-- Access the built-in web interface at the Shrooly’s IP on your LAN.  You might be able to use `http://shrooly` or `http://shrooly.local` if mDns works on your home network, otherwise you might have to look in your router's DHCP allocationst o find the address
+- Access the built-in web interface at the Shrooly’s IP on your LAN.  You might be able to use `http://shrooly` or `http://shrooly.local` if mDns works on your home network, otherwise you might have to look in your router's DHCP allocations to find the address
 - Experiment with sensors, lights. Automation is coming soon
 
 ---
