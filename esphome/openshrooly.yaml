@@ -5,14 +5,13 @@ esphome:
   project:
     name: grahamsz.openshrooly
     version: 0.0.0-dev
-  platformio_options:
-    platform: espressif32@6.6.0
+
 
 esp32:
   board: esp32-s3-devkitc-1
   framework:
     type: arduino
-    version: 3.1.3
+    
 
 logger:
 
@@ -27,6 +26,10 @@ ota:
 wifi:
   ap:
     ssid: "OpenShrooly"     # no password for easiest onboarding; add later if desired
+    manual_ip:
+      static_ip: 192.168.4.1
+      gateway: 192.168.4.1
+      subnet: 255.255.255.0
 captive_portal:
 
 web_server:
