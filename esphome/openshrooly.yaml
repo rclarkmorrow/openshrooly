@@ -6,11 +6,16 @@ esphome:
     name: grahamsz.openshrooly
     version: 0.0.0-dev
 
+  platformio_options:
+    platform_packages:
+      - framework-arduinoespressif32 @ https://github.com/espressif/arduino-esp32/releases/download/3.1.3/esp32-3.1.3.zip
+
 
 esp32:
   board: esp32-s3-devkitc-1
   framework:
     type: arduino
+    version: 3.10003.0
     
 
 logger:
