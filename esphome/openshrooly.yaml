@@ -5,7 +5,8 @@ esphome:
   project:
     name: grahamsz.openshrooly
     version: 0.0.0-dev
-
+  platformio_options:
+    platform: espressif32@6.6.0
 
 esp32:
   board: esp32-s3-devkitc-1
