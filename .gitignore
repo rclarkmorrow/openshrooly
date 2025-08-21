@@ -1,0 +1,10 @@
+# ESPHome build artifacts
+*.bin
+/.esphome/
+**/.pioenvs/
+**/.piolibdeps/
+
+# VSCode & OS
+.vscode/
+.DS_Store
+

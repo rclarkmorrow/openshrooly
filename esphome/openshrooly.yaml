@@ -1,0 +1,144 @@
+esphome:
+  name: shrooly
+  friendly_name: shrooly
+  project:
+    name: grahamsz.openshrooly
+    version: 0.0.0-dev
+  on_boot:
+    priority: -10
+    then:
+      - light.turn_on:
+          id: rgb_led_strip
+          brightness: 100%
+          red: 100%
+          green: 0%
+          blue: 0%
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+logger:
+
+# Public build: no API encryption or OTA password
+api:
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+
+# First-run: start as hotspot; user configures Wi-Fi via captive portal
+wifi:
+  ap:
+    ssid: "Shrooly Setup"     # no password for easiest onboarding; add later if desired
+captive_portal:
+
+web_server:
+  port: 80
+
+i2c:
+  sda: GPIO36
+  scl: GPIO35
+  scan: true
+  id: bus_a
+
+# -------------------------
+# PWM White LED Strip on IO39
+# -------------------------
+output:
+  - platform: ledc
+    pin: GPIO39
+    id: white_led_pwm
+    inverted: true
+
+  # Air exchange fan (PWM)
+  - platform: ledc
+    pin: GPIO37
+    id: fan_pwm
+    inverted: true
+
+light:
+  - platform: monochromatic
+    output: white_led_pwm
+    name: "White LED Strip"
+
+  - platform: esp32_rmt_led_strip
+    id: rgb_led_strip
+    name: "RGB WLED Strip"
+    pin: GPIO42
+    num_leds: 16
+    chipset: ws2812
+    rgb_order: RGB
+    effects:
+      - random:
+      - strobe:
+      - flicker:
+      - addressable_rainbow:
+      - addressable_scan:
+      - addressable_twinkle:
+
+switch:
+  - platform: template
+    name: "Humidifier Fan"
+    id: humidifier_fan
+    optimistic: true
+    turn_on_action:
+      - lambda: |-
+          uint8_t data[2] = {0x00, 0x01};
+          bool ok = id(bus_a).write(0x6C, data, 2);
+          ESP_LOGI("humidifier", "TURN ON: sent [0x00,0x01] to 0x6C, ok=%d", ok);
+    turn_off_action:
+      - lambda: |-
+          uint8_t data[2] = {0x00, 0x00};
+          bool ok = id(bus_a).write(0x6C, data, 2);
+          ESP_LOGI("humidifier", "TURN OFF: sent [0x00,0x00] to 0x6C, ok=%d", ok);
+
+fan:
+  - platform: speed
+    output: fan_pwm
+    name: "Air Exchange Fan"
+
+sensor:
+  - platform: sht4x
+    i2c_id: bus_a
+    temperature:
+      name: "SHT41 Temperature"
+    humidity:
+      name: "SHT41 Humidity"
+    update_interval: 30s
+
+  - platform: pulse_counter
+    pin: GPIO14
+    name: "Fan Tachometer"
+    id: fan_tach
+    unit_of_measurement: "RPM"
+    accuracy_decimals: 0
+    filters:
+      - multiply: 0.5
+    update_interval: 1s
+
+  - platform: template
+    name: "I2C Byte from 0x36"
+    id: i2c_byte_36
+    unit_of_measurement: "val"
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      uint8_t data;
+      if (id(bus_a).read(0x36, &data, 1)) {
+        return (float)data;
+      } else {
+        ESP_LOGW("i2c_byte_36", "Failed to read from 0x36");
+        return NAN;
+      }
+
+time:
+  - platform: ds1307
+    i2c_id: bus_a
+    address: 0x6F     # MCP7940N default I²C address
+    id: mcp7940n_time
+    timezone: "UTC"
+
+esp32_touch:
+
