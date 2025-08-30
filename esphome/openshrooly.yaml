@@ -121,6 +121,7 @@ light:
     internal: true
     pin: GPIO42
     num_leds: 16
+    rmt_channel: 0
     chipset: ws2812
     rgb_order: RGB
 
