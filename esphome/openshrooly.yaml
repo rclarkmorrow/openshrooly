@@ -1,132 +1,535 @@
 esphome:
-  name: shrooly
-  friendly_name: shrooly
+  name: openshrooly
+  friendly_name: OpenShrooly
   project:
     name: grahamsz.openshrooly
-    version: 0.0.0-dev
+    version: 0.1.0-dev
+
+  on_boot:
+    priority: -10
+    then:
+      - wait_until:
+          condition:
+            lambda: 'return !isnan(id(humidity).state);'
+          timeout: 30s
+      - climate.control:
+          id: humidity_pid
+          mode: HEAT
+          target_temperature: !lambda 'return id(target_humidity).state;'
+      - script.execute: air_exchange_manager
 
 esp32:
   board: esp32-s3-devkitc-1
   framework:
     type: arduino
-    
 
 logger:
+  level: DEBUG
 
-# Public build: no API encryption or OTA password
 api:
   reboot_timeout: 0s
 
 ota:
   - platform: esphome
 
-# First-run: start as hotspot; user configures Wi-Fi via captive portal
 wifi:
   ap:
-    ssid: "OpenShrooly"     # no password for easiest onboarding; add later if desired
+    ssid: "OpenShrooly"
     manual_ip:
       static_ip: 192.168.4.1
       gateway: 192.168.4.1
       subnet: 255.255.255.0
+
 captive_portal:
 
 web_server:
   port: 80
   version: 3
+  # show non-exposed helpers only if you want them visible:
+  # include_internal: true
+  sorting_groups:
+    - id: grp_air
+      name: "Air Exchange"
+      sorting_weight: 10
+    - id: grp_humidity
+      name: "Humidity"
+      sorting_weight: 20
+    - id: grp_lights
+      name: "Lights"
+      sorting_weight: 30
+    - id: grp_env
+      name: "Environment"
+      sorting_weight: 99
 
-# I2C bus configuration
-# Used for SHT41 sensor, MCP7940N RTC, and humidifier control (also probably water level sensor)
+
 i2c:
   sda: GPIO36
   scl: GPIO35
   scan: true
   id: bus_a
 
-
+# -------------------
+# Outputs & devices
+# -------------------
 output:
-  # White LED strip (PWM-brightness control on GPIO39)
   - platform: ledc
     pin: GPIO39
     id: white_led_pwm
     inverted: true
 
-  # Air exchange fan (PWM-speed control on GPIO37)
   - platform: ledc
     pin: GPIO37
     id: fan_pwm
     inverted: true
 
-# Create two light entities
+  # PID -> ON/OFF bridge (trimmed lambda)
+  - platform: template
+    id: humidifier_bang_output
+    type: float
+    write_action:
+      - lambda: |-
+          static bool last = false;
+          bool now = (state > 0.01f);
+          if (now == last) return;
+          last = now;
+
+          // ADDED: Log & explain why it changed, and publish status
+          float h = isnan(id(humidity).state) ? -1.0f : id(humidity).state;
+          float tgt = id(target_humidity).state;
+          if (now) {
+            ESP_LOGI("shrooly", "Humidifier fan ON (PID demand=%.2f > 0). Humidity=%.1f%%, Target=%.1f%%",
+                     state, h, tgt);
+            id(humidifier_fan_status).publish_state(
+              (String("ON — humidity ") + String(h,1) + "% below target " + String(tgt,1) + "%").c_str());
+            id(humidifier_fan).turn_on();
+          } else {
+            ESP_LOGI("shrooly", "Humidifier fan OFF (PID demand=%.2f ≤ 0). Humidity=%.1f%%, Target=%.1f%%",
+                     state, h, tgt);
+            id(humidifier_fan_status).publish_state(
+              (String("OFF — humidity near/above target ") + String(tgt,1) + "%").c_str());
+            id(humidifier_fan).turn_off();
+          }
+
 light:
   - platform: monochromatic
     output: white_led_pwm
-    name: "White LED Strip"
+    id: white_led
+    internal: true
 
   - platform: esp32_rmt_led_strip
     id: rgb_led_strip
-    name: "RGB WLED Strip"
+    internal: true
     pin: GPIO42
     num_leds: 16
     chipset: ws2812
-    rmt_channel: 0
     rgb_order: RGB
-    effects:
-      - random:
-      - strobe:
-      - flicker:
-      - addressable_rainbow:
-      - addressable_scan:
-      - addressable_twinkle:
 
-# Humidifier control via I2C commands
 switch:
   - platform: template
-    name: "Humidifier Fan"
     id: humidifier_fan
-    optimistic: true  # Assume the switch state is always correct, because there doesn't seem to be I2C feedback
+    internal: true
+    optimistic: true
     turn_on_action:
       - lambda: |-
           uint8_t data[2] = {0x00, 0x01};
-          bool ok = id(bus_a).write(0x6C, data, 2);
-          ESP_LOGI("humidifier", "TURN ON: sent [0x00,0x01] to 0x6C, ok=%d", ok);
+          id(bus_a).write(0x6C, data, 2);
     turn_off_action:
       - lambda: |-
           uint8_t data[2] = {0x00, 0x00};
-          bool ok = id(bus_a).write(0x6C, data, 2);
-          ESP_LOGI("humidifier", "TURN OFF: sent [0x00,0x00] to 0x6C, ok=%d", ok);
+          id(bus_a).write(0x6C, data, 2);
 
-# Air exchange fan control via PWM output
 fan:
   - platform: speed
     output: fan_pwm
-    name: "Air Exchange Fan"
+    id: air_exchange_fan
+    internal: true
+    speed_count: 100
 
 sensor:
   - platform: sht4x
     i2c_id: bus_a
     temperature:
+      id: temp
       name: "Temperature"
+      web_server:
+        sorting_group_id: grp_env
+        sorting_weight: 50
     humidity:
+      id: humidity
       name: "Humidity"
+      web_server:
+        sorting_group_id: grp_env
+        sorting_weight: 60
     update_interval: 30s
 
   - platform: pulse_counter
     pin: GPIO14
-    name: "Air Exchange Fan Speed"
     id: fan_tach
+    name: "Air Exchange Fan Speed"
     unit_of_measurement: "RPM"
     accuracy_decimals: 0
     filters:
-      - multiply: 0.5 #This seems to scale consistently with the displayed values in the Shrooly self-test
+      - multiply: 0.5
     update_interval: 1s
+    web_server:
+      sorting_group_id: grp_env
+      sorting_weight: 40
 
 
+
+
+# -------------------
+# PID humidity control (hidden)
+# -------------------
+climate:
+  - platform: pid
+    id: humidity_pid
+    internal: true
+    sensor: humidity
+    heat_output: humidifier_bang_output
+    default_target_temperature: 70.0
+    visual:
+      min_temperature: 60
+      max_temperature: 100
+      temperature_step: 0.5
+    control_parameters:
+      kp: 0.8
+      ki: 0.02
+      kd: 0.0
+
+# -------------------
+# Time (UTC)
+# -------------------
 time:
+  - platform: sntp
+    id: sntp_time
+    timezone: "Etc/UTC"
+    on_time_sync:
+      then:
+        - ds1307.write_time: { id: mcp7940n_time }
+
   - platform: ds1307
     i2c_id: bus_a
-    address: 0x6F     # MCP7940N default I²C address
+    address: 0x6F
     id: mcp7940n_time
-    timezone: "UTC"
+    timezone: "Etc/UTC"
 
-esp32_touch:
+# -------------------
+# Lighting window logic
+# -------------------
+globals:
+  - id: lights_on_flag
+    type: bool
+    restore_value: yes
+    initial_value: 'false'
 
+  # ADDED: Air exchange on/off flag & next-change timestamps (epoch seconds)
+  - id: air_exchange_on_flag
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  - id: air_exchange_next_on_ts
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: air_exchange_next_off_ts
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+# -------------------
+# ADDED: Human-readable status text_sensors
+# -------------------
+text_sensor:
+  - platform: template
+    id: humidifier_fan_status
+    name: "Humidifier Fan Status"
+    web_server:
+      sorting_group_id: grp_humidity
+      sorting_weight: 1   
+
+  - platform: template
+    id: air_exchange_status
+    name: "Air Exchange Status"
+    web_server:
+      sorting_group_id: grp_air
+      sorting_weight: 1    
+
+  - platform: template
+    id: lights_status
+    name: "Lights Status"
+    web_server:
+      sorting_group_id: grp_lights
+      sorting_weight: 1    
+
+script:
+  - id: air_exchange_manager
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: 'return true;'
+          then:
+            # Turn ON period
+            - lambda: |-
+                auto t = id(sntp_time).now();
+                int run_sec = (int) id(air_exchange_run_sec).state;
+                id(air_exchange_on_flag) = true;
+                id(air_exchange_next_off_ts) = t.is_valid() ? (t.timestamp + run_sec) : 0;
+                String msg = "ON @" + String((int)id(air_exchange_speed).state) + "% for " + String(run_sec) + "s";
+                id(air_exchange_status).publish_state(msg.c_str());
+                ESP_LOGI("shrooly", "Air exchange %s", msg.c_str());
+            - fan.turn_on:
+                id: air_exchange_fan
+                speed: !lambda 'return (int) id(air_exchange_speed).state;'
+            - delay: !lambda 'return (uint32_t) (id(air_exchange_run_sec).state * 1000);'
+
+            # Turn OFF (rest) period
+            - fan.turn_off: air_exchange_fan
+            - lambda: |-
+                int period_ms = (int)(id(air_exchange_period_min).state * 60000.0f);
+                int run_ms    = (int)(id(air_exchange_run_sec).state   * 1000.0f);
+                int rest_ms   = period_ms - run_ms;
+                if (rest_ms < 0) rest_ms = 0;
+
+                auto t = id(sntp_time).now();
+                id(air_exchange_on_flag) = false;
+                int rest_sec = rest_ms / 1000;
+                id(air_exchange_next_on_ts) = t.is_valid() ? (t.timestamp + rest_sec) : 0;
+                String msg = "OFF for " + String(rest_sec) + "s (next ON @" + String((int)id(air_exchange_speed).state) + "%)";
+                id(air_exchange_status).publish_state(msg.c_str());
+                ESP_LOGI("shrooly", "Air exchange %s", msg.c_str());
+            - delay: !lambda |-
+                int period_ms = (int)(id(air_exchange_period_min).state * 60000.0f);
+                int run_ms    = (int)(id(air_exchange_run_sec).state   * 1000.0f);
+                int rest_ms   = period_ms - run_ms;
+                if (rest_ms < 0) rest_ms = 0;
+                return (uint32_t) rest_ms;
+
+interval:
+  - interval: 30s
+    then:
+      - lambda: |-
+          auto t = id(sntp_time).now();
+          if (!t.is_valid()) return;
+          int sunrise_h = (int) id(sunrise_hour).state;
+          int start_min = sunrise_h * 60;
+          int end_min   = sunrise_h * 60 + (int)(id(light_hours).state * 60);
+          int now_min   = t.hour * 60 + t.minute;
+          bool in_win   = (now_min >= start_min) && (now_min < end_min);
+
+          // ADDED: publish readable status with countdown estimate
+          if (in_win) {
+            int sec_left = (end_min - now_min) * 60;
+            id(lights_status).publish_state(
+              (String("ON — ends in ") + String(sec_left) + "s").c_str());
+          } else if (now_min < start_min) {
+            int sec_to_on = (start_min - now_min) * 60;
+            id(lights_status).publish_state(
+              (String("OFF — next ON in ") + String(sec_to_on) + "s").c_str());
+          } else { // after window
+            int sec_to_tomorrow_on = ((24*60 - now_min) + start_min) * 60;
+            id(lights_status).publish_state(
+              (String("OFF — next ON in ") + String(sec_to_tomorrow_on) + "s").c_str());
+          }
+
+          if (in_win && !id(lights_on_flag)) id(lights_on_flag) = true;
+          if (!in_win && id(lights_on_flag)) id(lights_on_flag) = false;
+
+      # OFF -> ON transition: ramp on
+      - if:
+          condition:
+            lambda: 'return id(lights_on_flag) && !id(white_led).current_values.is_on();'
+          then:
+            - light.turn_on:
+                id: white_led
+                brightness: !lambda 'return id(white_intensity).state / 100.0f;'
+                transition_length: 60s
+            - lambda: |-
+                auto rgb_on = id(rgb_led_strip).turn_on();
+                rgb_on.set_rgb(id(color_r).state / 255.0f,
+                               id(color_g).state / 255.0f,
+                               id(color_b).state / 255.0f);
+                rgb_on.set_brightness(1.0f);
+                rgb_on.set_transition_length(60000);
+                rgb_on.perform();
+                ESP_LOGI("shrooly", "Lights ON (ramping 60s) — target white=%.0f%%", id(white_intensity).state);
+
+      # ON -> OFF transition: fade off
+      - if:
+          condition:
+            lambda: 'return !id(lights_on_flag) && id(white_led).current_values.is_on();'
+          then:
+            - light.turn_off:
+                id: white_led
+                transition_length: 2s
+            - light.turn_off:
+                id: rgb_led_strip
+                transition_length: 2s
+            - lambda: |-
+                ESP_LOGI("shrooly", "Lights OFF (fade 2s)");
+
+      # While ON, refresh levels (no transition)
+      - if:
+          condition:
+            lambda: 'return id(lights_on_flag);'
+          then:
+            - light.turn_on:
+                id: white_led
+                brightness: !lambda 'return id(white_intensity).state / 100.0f;'
+            - lambda: |-
+                auto rgb_set = id(rgb_led_strip).turn_on();
+                rgb_set.set_rgb(id(color_r).state / 255.0f,
+                                id(color_g).state / 255.0f,
+                                id(color_b).state / 255.0f);
+                rgb_set.set_brightness(1.0f);
+                rgb_set.perform();
+
+# -------------------
+# CONTROLS (exposed to UI)
+# -------------------
+number:
+  - platform: template
+    id: target_humidity
+    name: "Target Humidity (%)"
+    min_value: 60
+    max_value: 100
+    step: 0.5
+    mode: slider
+    optimistic: true
+    restore_value: true
+    initial_value: 70
+    web_server:
+      sorting_group_id: grp_humidity
+      sorting_weight: 10
+
+    set_action:
+      - climate.control:
+          id: humidity_pid
+          mode: HEAT
+          target_temperature: !lambda 'return x;'
+
+  - platform: template
+    id: air_exchange_period_min
+    name: "Air Exchange: Period (min)"
+    min_value: 1
+    max_value: 240
+    step: 1
+    web_server:
+      sorting_group_id: grp_air
+      sorting_weight: 5    
+    optimistic: true
+    restore_value: true
+    initial_value: 15
+    on_value:
+      - script.execute: air_exchange_manager
+
+  - platform: template
+    id: air_exchange_run_sec
+    name: "Air Exchange: Run Duration (s)"
+    min_value: 5
+    max_value: 900
+    step: 5
+    web_server:
+      sorting_group_id: grp_air
+      sorting_weight: 15    
+    optimistic: true
+    restore_value: true
+    initial_value: 30
+    on_value:
+      - script.execute: air_exchange_manager
+
+  - platform: template
+    id: air_exchange_speed
+    name: "Air Exchange: Speed (%)"
+    min_value: 0
+    max_value: 100
+    step: 5
+    web_server:
+      sorting_group_id: grp_air
+      sorting_weight: 25
+    optimistic: true
+    restore_value: true
+    initial_value: 30
+    on_value:
+      - script.execute: air_exchange_manager
+
+  - platform: template
+    id: sunrise_hour
+    name: "Lights: Sunrise Hour (UTC)"
+    min_value: 0
+    max_value: 23
+    step: 1
+    web_server:
+      sorting_group_id: grp_lights
+      sorting_weight: 5    
+    optimistic: true
+    restore_value: true
+    initial_value: 8
+
+  - platform: template
+    id: light_hours
+    name: "Lights: Duration (Hours)"
+    min_value: 0
+    max_value: 24
+    step: 0.25
+    web_server:
+      sorting_group_id: grp_lights
+      sorting_weight: 15
+    optimistic: true
+    restore_value: true
+    initial_value: 12
+
+  - platform: template
+    id: white_intensity
+    name: "White LED Intensity (%)"
+    min_value: 0
+    max_value: 100
+    step: 1
+    web_server:
+      sorting_group_id: grp_lights
+      sorting_weight: 25    
+    optimistic: true
+    restore_value: true
+    initial_value: 15
+
+  - platform: template
+    id: color_r
+    name: "RGB Red (0-255)"
+    min_value: 0
+    max_value: 255
+    step: 1
+    web_server:
+      sorting_group_id: grp_lights
+      sorting_weight: 35    
+    optimistic: true
+    restore_value: true
+    initial_value: 0
+
+  - platform: template
+    id: color_g
+    name: "RGB Green (0-255)"
+    min_value: 0
+    max_value: 255
+    step: 1
+    optimistic: true
+    web_server:
+      sorting_group_id: grp_lights
+      sorting_weight: 45    
+    restore_value: true
+    initial_value: 0
+
+  - platform: template
+    id: color_b
+    name: "RGB Blue (0-255)"
+    min_value: 0
+    max_value: 255    
+    step: 1
+    web_server:
+      sorting_group_id: grp_lights
+      sorting_weight: 55    
+    optimistic: true
+    restore_value: true
+    initial_value: 255
