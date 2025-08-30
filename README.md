@@ -10,6 +10,6 @@ The 0.1 release should have enough to cultivate mushrooms (unfortunately my own 
 
 ---
 
-## Documentation 
-* [Installation Instructions](/docs/install.md)
+## Documentation
 
+See the [Wiki](https://github.com/grahamsz/openshrooly/wiki) for installation and operation instructions
