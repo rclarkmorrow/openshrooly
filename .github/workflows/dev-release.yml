@@ -68,13 +68,13 @@ jobs:
             ${{ steps.build.outputs.name }}/${{ steps.build.outputs.name }}.factory.bin
             ${{ steps.build.outputs.name }}/${{ steps.build.outputs.name }}.ota.bin
             ${{ steps.build.outputs.name }}/manifest.json
-
-      # ----- Dated daily prerelease (one per day) -----
+        
+       # Dated dev prerelease
       - name: Publish dated dev prerelease
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.DATE_TAG }}
-          name: "openshrooly dev ${ env.DATE }"
+          name: "openshrooly dev ${{ env.DATE }}"   # <-- fixed
           prerelease: true
           replace_assets: true
           make_latest: false
@@ -82,21 +82,22 @@ jobs:
             ${{ steps.build.outputs.name }}/${{ steps.build.outputs.name }}.factory.bin
             ${{ steps.build.outputs.name }}/${{ steps.build.outputs.name }}.ota.bin
             ${{ steps.build.outputs.name }}/manifest.json
-
-      # ----- Proper release for pushed tags (e.g., 0.1.0); runs when the ref is a tag.
+      
+      # Proper release for pushed tags (e.g., 0.1.0)
       - name: Publish release for version tag
         if: startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref_name, 'dev-')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "openshrooly ${ github.ref_name }}"
+          name: "openshrooly ${{ github.ref_name }}"  # <-- fixed
           prerelease: false
-          replace_assets: true        # if the tag moves, assets are replaced
+          replace_assets: true
           make_latest: true
           files: |
             ${{ steps.build.outputs.name }}/${{ steps.build.outputs.name }}.factory.bin
             ${{ steps.build.outputs.name }}/${{ steps.build.outputs.name }}.ota.bin
             ${{ steps.build.outputs.name }}/manifest.json
+
 
       # ----- Actions artifacts (handy for CI consumption) -----
       - name: Upload artifact (by SHA)
