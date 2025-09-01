@@ -1,0 +1,34 @@
+# This script evaluates humidity against a target setpoint with hysteresis.
+# It turns the humidifier fan ON when humidity is below target,
+# and OFF when above, while updating a status sensor accordingly.
+# This is run every second when the new humidity value comes in
+
+id: humidity_control_manager
+mode: queued
+then:
+  - lambda: |-
+      if (!isnan(id(humidity).state) && !isnan(id(target_humidity).state)) {
+        float h = id(humidity).state;
+        float t = id(target_humidity).state;
+
+        if (!id(humidifier_on_flag) && h < t - 0.5f) {
+          // Turn ON
+          id(humidifier_on_flag) = true;
+          id(humidifier_fan).turn_on();
+        } else if (id(humidifier_on_flag) && h > t + 0.5f) {
+          // Turn OFF
+          id(humidifier_on_flag) = false;
+          id(humidifier_fan).turn_off();
+        }
+
+        // Always publish status (reflects current flag and live values)
+        if (id(humidifier_on_flag)) {
+          id(humidifier_fan_status).publish_state(
+            str_sprintf("ON — humidity %.1f%% (target %.1f%%)", h, t).c_str()
+          );
+        } else {
+          id(humidifier_fan_status).publish_state(
+            str_sprintf("OFF — humidity %.1f%% (target %.1f%%)", h, t).c_str()
+          );
+        }
+      }

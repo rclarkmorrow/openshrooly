@@ -1,0 +1,24 @@
+# This syncs the internal clock to NTP - how can we control the timezone better?
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: "Etc/UTC"
+    on_time_sync:
+      then:
+        - lambda: |-
+            auto now = id(sntp_time).now();
+            if (now.is_valid()) {
+              ESP_LOGI("time", "SNTP time sync successful: %04d-%02d-%02d %02d:%02d:%02d UTC",
+                       now.year, now.month, now.day_of_month,
+                       now.hour, now.minute, now.second);
+            } else {
+              ESP_LOGI("time", "SNTP time sync attempted, but time not valid yet");
+            }
+        - ds1307.write_time: { id: mcp7940n_time }
+
+  - platform: ds1307
+    i2c_id: bus_a
+    address: 0x6F
+    id: mcp7940n_time
+    timezone: "Etc/UTC"

@@ -1,0 +1,26 @@
+
+globals:
+  - id: lights_on_flag
+    type: bool
+    restore_value: yes
+    initial_value: 'false'
+
+  - id: air_exchange_on_flag
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  - id: air_exchange_next_on_ts
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: air_exchange_next_off_ts
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: humidifier_on_flag
+    type: bool
+    restore_value: yes
+    initial_value: 'false'

@@ -1,0 +1,93 @@
+id: lighting_control_manager
+mode: queued
+then:
+  - lambda: |-
+      auto t = id(sntp_time).now();
+      if (!t.is_valid()) return;
+
+      int sunrise_h = (int) id(sunrise_hour).state;
+      int start_min = sunrise_h * 60;
+      int end_min   = sunrise_h * 60 + (int)(id(light_hours).state * 60);
+      int now_min   = t.hour * 60 + t.minute;
+      bool in_win   = (now_min >= start_min) && (now_min < end_min);
+
+      if (in_win) {
+        // seconds until window end
+        int sec_left = end_min * 60 - (t.hour*3600 + t.minute*60 + t.second);
+        if (sec_left < 0) sec_left = 0;
+        id(lights_status).publish_state(
+          str_sprintf("ON, %ds left", sec_left).c_str()
+        );
+      } else if (now_min < start_min) {
+        // seconds until today’s ON
+        int sec_to_on = start_min * 60 - (t.hour*3600 + t.minute*60 + t.second);
+        if (sec_to_on < 0) sec_to_on = 0;
+        id(lights_status).publish_state(
+          str_sprintf("OFF, %ds left", sec_to_on).c_str()
+        );
+      } else {
+        // already past today’s window → next ON is tomorrow
+        int sec_to_tomorrow_on =
+          ((24*60 - now_min) + start_min) * 60 - t.second;
+        if (sec_to_tomorrow_on < 0) sec_to_tomorrow_on = 0;
+        id(lights_status).publish_state(
+          str_sprintf("OFF — next ON in %ds", sec_to_tomorrow_on).c_str()
+        );
+      }
+
+      // Update the flag so transitions below work
+      if (in_win && !id(lights_on_flag)) {
+        id(lights_on_flag) = true;
+      }
+      if (!in_win && id(lights_on_flag)) {
+        id(lights_on_flag) = false;
+      }
+
+  # OFF -> ON transition
+  - if:
+      condition:
+        lambda: 'return id(lights_on_flag) && !id(white_led).current_values.is_on();'
+      then:
+        - light.turn_on:
+            id: white_led
+            brightness: !lambda 'return id(white_intensity).state / 100.0f;'
+            transition_length: 60s
+        - lambda: |-
+            auto rgb_on = id(rgb_led_strip).turn_on();
+            rgb_on.set_rgb(id(color_r).state / 255.0f,
+                           id(color_g).state / 255.0f,
+                           id(color_b).state / 255.0f);
+            rgb_on.set_brightness(1.0f);
+            rgb_on.set_transition_length(60000);
+            rgb_on.perform();
+            ESP_LOGI("shrooly", "Lights ON (ramping 60s) — target white=%.0f%%", id(white_intensity).state);
+
+  # ON -> OFF transition
+  - if:
+      condition:
+        lambda: 'return !id(lights_on_flag) && id(white_led).current_values.is_on();'
+      then:
+        - light.turn_off:
+            id: white_led
+            transition_length: 2s
+        - light.turn_off:
+            id: rgb_led_strip
+            transition_length: 2s
+        - lambda: |-
+            ESP_LOGI("shrooly", "Lights OFF (fade 2s)");
+
+  # While ON, refresh levels (no transition)
+  - if:
+      condition:
+        lambda: 'return id(lights_on_flag);'
+      then:
+        - light.turn_on:
+            id: white_led
+            brightness: !lambda 'return id(white_intensity).state / 100.0f;'
+        - lambda: |-
+            auto rgb_set = id(rgb_led_strip).turn_on();
+            rgb_set.set_rgb(id(color_r).state / 255.0f,
+                            id(color_g).state / 255.0f,
+                            id(color_b).state / 255.0f);
+            rgb_set.set_brightness(1.0f);
+            rgb_set.perform();

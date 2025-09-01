@@ -1,0 +1,82 @@
+id: air_exchange_manager
+mode: restart
+then:
+  - while:
+      condition:
+        lambda: 'return true;'
+      then:
+
+        # ===== ON PERIOD =====
+        - lambda: |-
+            auto t = id(sntp_time).now();
+            const int run_sec = (int) id(air_exchange_run_sec).state;
+            id(air_exchange_on_flag) = true;
+            id(air_exchange_next_off_ts) = t.is_valid() ? (t.timestamp + run_sec) : 0;
+
+            String msg = "ON @" + String((int)id(air_exchange_speed).state) + "% for " + String(run_sec) + "s";
+            id(air_exchange_status).publish_state(msg.c_str());
+
+            // Only log on change
+            static std::string last_log_msg;
+            if (last_log_msg != std::string(msg.c_str())) {
+              ESP_LOGI("shrooly", "Air exchange %s", msg.c_str());
+              last_log_msg = msg.c_str();
+            }
+
+        - fan.turn_on:
+            id: air_exchange_fan
+            speed: !lambda 'return (int) id(air_exchange_speed).state;'
+
+        # Per-second status during ON
+        - repeat:
+            count: !lambda 'return (int)id(air_exchange_run_sec).state;'
+            then:
+              - lambda: |-
+                  auto t = id(sntp_time).now();
+                  int remaining = id(air_exchange_next_off_ts) - (t.is_valid() ? t.timestamp : 0);
+                  if (remaining < 0) remaining = 0;
+                  String msg = "ON @" + String((int)id(air_exchange_speed).state) + "%, " + String(remaining) + "s left";
+                  id(air_exchange_status).publish_state(msg.c_str());
+              - delay: 1s
+
+        - fan.turn_off: air_exchange_fan
+
+        # ===== OFF PERIOD =====
+        - lambda: |-
+            // Compute rest as (period - run). Clamp to >= 0.
+            const int period_ms = (int)(id(air_exchange_period_min).state * 60000.0f);
+            const int run_ms    = (int)(id(air_exchange_run_sec).state   * 1000.0f);
+            int rest_ms         = period_ms - run_ms;
+            if (rest_ms < 0) rest_ms = 0;           // handle run >= period
+            const int rest_sec  = rest_ms / 1000;
+
+            auto t = id(sntp_time).now();
+            id(air_exchange_on_flag) = false;
+            id(air_exchange_next_on_ts) = t.is_valid() ? (t.timestamp + rest_sec) : 0;
+
+            String msg = "OFF, " + String(rest_sec) + "s left";
+            id(air_exchange_status).publish_state(msg.c_str());
+
+            // Only log on change
+            static std::string last_log_msg;
+            if (last_log_msg != std::string(msg.c_str())) {
+              ESP_LOGI("shrooly", "Air exchange %s", msg.c_str());
+              last_log_msg = msg.c_str();
+            }
+
+        # Per-second status during OFF (does nothing if rest_sec == 0)
+        - repeat:
+            count: !lambda |-
+              const int period_ms = (int)(id(air_exchange_period_min).state * 60000.0f);
+              const int run_ms    = (int)(id(air_exchange_run_sec).state   * 1000.0f);
+              int rest_ms         = period_ms - run_ms;
+              if (rest_ms < 0) rest_ms = 0;
+              return (int)(rest_ms / 1000);
+            then:
+              - lambda: |-
+                  auto t = id(sntp_time).now();
+                  int remaining = id(air_exchange_next_on_ts) - (t.is_valid() ? t.timestamp : 0);
+                  if (remaining < 0) remaining = 0;
+                  String msg = "OFF, " + String(remaining) + "s left";
+                  id(air_exchange_status).publish_state(msg.c_str());
+              - delay: 1s
