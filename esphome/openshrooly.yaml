@@ -3,7 +3,7 @@ esphome:
   friendly_name: OpenShrooly
   project:
     name: grahamsz.openshrooly
-    version: 0.2.1
+    version: 0.2.2
 
   on_boot:
     priority: -10
@@ -37,10 +37,11 @@ wifi:
       gateway: 192.168.4.1
       subnet: 255.255.255.0
 
+  on_connect:
+    then:
+      - component.update: my_display   
+
 captive_portal:
-
-
-
 
 script:
   # This runs in a continuous loop (or when the timing is changed)
@@ -73,6 +74,11 @@ interval:
           } else {
             ESP_LOGW("time", "SNTP time not valid yet");
           }
+  
+  - interval: 5min
+    then:
+      - component.update: my_display
+
 
 <<: !include components/globals.yaml
 <<: !include components/controls.yaml

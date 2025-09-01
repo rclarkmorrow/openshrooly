@@ -1,10 +1,12 @@
-
-
 i2c:
   sda: GPIO36
   scl: GPIO35
   scan: true
   id: bus_a
+
+spi:
+  clk_pin: GPIO7
+  mosi_pin: GPIO6
 
 output:
   - platform: ledc
@@ -17,6 +19,13 @@ output:
     id: fan_pwm
     inverted: true
 
+  - platform: ledc
+    pin: GPIO47
+    id: rtttl_out
+
+rtttl:
+  output: rtttl_out
+  id: buzzer
 
 light:
   - platform: monochromatic
@@ -89,23 +98,43 @@ sensor:
       sorting_group_id: grp_env
       sorting_weight: 40
 
+font:
+  - file: 'fonts/spleen-6x12.bdf'
+    id: font1 
 
-# Need to trace correct pins for SPI
-# font:
-#   - file: 'fonts/spleen-6x12.bdf'
-#     id: font1 
+image:
+  - file: "images/background.bmp"
+    id: background
+    type: BINARY
+    
+display:
+  - platform: waveshare_epaper
+    id: my_display
+    cs_pin: GPIO8
+    dc_pin: GPIO48
+    busy_pin: GPIO38
+    reset_pin: GPIO21
+    rotation: 90°
+    model: 2.90inv2-r2
+    full_update_every: 3600
+    auto_clear_enabled: false
+    lambda: |-
+      // Draw background
+      it.image(0, 0, id(background), COLOR_OFF, COLOR_ON);
 
-# spi:
-#   clk_pin: GPIO0
-#   mosi_pin: GPIO1
+      // Hello World title
+      it.print(135, 20, id(font1), "www.openshrooly.com");
 
-# display:
-#   - platform: waveshare_epaper
-#     cs_pin: GPIO2
-#     dc_pin: GPIO3
-#     busy_pin: GPIO4
-#     reset_pin: GPIO5
-#     model: 2.90in
-#     full_update_every: 30
-#     lambda: |-
-#       it.print(0, 0, id(font1), "Hello World!");
+      // WiFi / AP status
+      if (WiFi.isConnected()) {
+        // Connected as station
+        auto ssid = WiFi.SSID();
+        auto ip = WiFi.localIP().toString();
+        it.printf(135, 32, id(font1), "SSID: %s", ssid.c_str());
+        it.printf(135, 44, id(font1), "IP: %s", ip.c_str());
+      } else {
+        // AP fallback mode
+        auto ip = WiFi.softAPIP().toString();
+        it.print(135, 32, id(font1), "SSID: OpenShrooly");
+        it.printf(135, 44, id(font1), "Waiting to be configured");
+      }

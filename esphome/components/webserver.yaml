@@ -15,3 +15,7 @@ web_server:
       name: "Environment"
       sorting_weight: 99
 
+    - id: grp_extras
+      name: "Extras"
+      sorting_weight: 100
+
