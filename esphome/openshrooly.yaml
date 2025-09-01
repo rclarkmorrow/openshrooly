@@ -3,7 +3,7 @@ esphome:
   friendly_name: OpenShrooly
   project:
     name: grahamsz.openshrooly
-    version: 0.1.0-dev
+    version: 0.2.1
 
   on_boot:
     priority: -10
