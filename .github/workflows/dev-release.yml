@@ -1,11 +1,20 @@
 name: Build development firmware
+
 on:
   push:
-    branches: ["**"]
+    branches: ["**"]        # any branch
+    tags: ["*"]             # any tag (creation or moved)
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: true
+
+env:
+  VERSION: "2024.11.3"
 
 jobs:
   build:
@@ -13,16 +22,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build firmware
+      - name: Compute names
+        id: names
+        run: |
+          DATE_UTC=$(date -u +%Y-%m-%d)
+          echo "DATE=${DATE_UTC}" >> $GITHUB_ENV
+          echo "DATE_TAG=dev-${DATE_UTC}" >> $GITHUB_ENV
+          echo "BUILD_DIR=${{ github.workspace }}/$(basename ${{ github.repository }})" >> $GITHUB_ENV
+
+      - name: Build firmware (once)
         id: build
         uses: esphome/build-action@v7
         with:
           yaml-file: esphome/openshrooly.yaml
           complete-manifest: true
           release-summary: "Dev build from ${{ github.ref }} @ ${{ github.sha }}"
-          version: "2024.11.3"
-          
+          version: "${{ env.VERSION }}"
 
+      # ----- Dev "latest" moving tag -----
       - name: Tag dev-latest
         run: |
           git config user.name "github-actions"
@@ -30,21 +47,103 @@ jobs:
           git tag -f dev-latest $GITHUB_SHA
           git push -f origin dev-latest
 
-      - name: Publish dev prerelease
+      # ----- Dated daily tag (keeps ~30 days) -----
+      - name: Tag dated daily build
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git tag -f "${DATE_TAG}" $GITHUB_SHA
+          git push -f origin "${DATE_TAG}"
+
+      # ----- Undated latest prerelease (assets replaced each run) -----
+      - name: Publish dev-latest prerelease
         uses: softprops/action-gh-release@v2
         with:
           tag_name: dev-latest
           name: "openshrooly development build"
           prerelease: true
+          replace_assets: true
+          make_latest: false
           files: |
             ${{ steps.build.outputs.name }}/${{ steps.build.outputs.name }}.factory.bin
             ${{ steps.build.outputs.name }}/${{ steps.build.outputs.name }}.ota.bin
             ${{ steps.build.outputs.name }}/manifest.json
 
-      - name: Upload artifacts
+      # ----- Dated daily prerelease (one per day) -----
+      - name: Publish dated dev prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.DATE_TAG }}
+          name: "openshrooly dev ${ env.DATE }"
+          prerelease: true
+          replace_assets: true
+          make_latest: false
+          files: |
+            ${{ steps.build.outputs.name }}/${{ steps.build.outputs.name }}.factory.bin
+            ${{ steps.build.outputs.name }}/${{ steps.build.outputs.name }}.ota.bin
+            ${{ steps.build.outputs.name }}/manifest.json
+
+      # ----- Proper release for pushed tags (e.g., 0.1.0); runs when the ref is a tag.
+      - name: Publish release for version tag
+        if: startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref_name, 'dev-')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "openshrooly ${ github.ref_name }}"
+          prerelease: false
+          replace_assets: true        # if the tag moves, assets are replaced
+          make_latest: true
+          files: |
+            ${{ steps.build.outputs.name }}/${{ steps.build.outputs.name }}.factory.bin
+            ${{ steps.build.outputs.name }}/${{ steps.build.outputs.name }}.ota.bin
+            ${{ steps.build.outputs.name }}/manifest.json
+
+      # ----- Actions artifacts (handy for CI consumption) -----
+      - name: Upload artifact (by SHA)
         uses: actions/upload-artifact@v4
         with:
           name: openshrooly-dev-${{ github.sha }}
-          path: |
-            ${{ steps.build.outputs.name }}/*
+          path: ${{ steps.build.outputs.name }}/*
+          retention-days: 90
 
+      - name: Upload artifact (latest)
+        uses: actions/upload-artifact@v4
+        with:
+          name: openshrooly-dev-latest
+          path: ${{ steps.build.outputs.name }}/*
+          retention-days: 30
+
+      - name: Upload artifact (dated)
+        uses: actions/upload-artifact@v4
+        with:
+          name: openshrooly-dev-${{ env.DATE }}
+          path: ${{ steps.build.outputs.name }}/*
+          retention-days: 30
+
+      # ----- Prune dated prereleases (keep ~30 most recent dev-YYYY-MM-DD) -----
+      - name: Prune old dated prereleases
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const keep = 30
+            const { data: releases } = await github.request('GET /repos/{owner}/{repo}/releases', {
+              owner: context.repo.owner, repo: context.repo.repo, per_page: 100
+            })
+            const dated = releases
+              .filter(r => r.tag_name?.startsWith('dev-') && /\d{4}-\d{2}-\d{2}$/.test(r.tag_name))
+              .sort((a,b) => new Date(b.published_at) - new Date(a.published_at))
+            const toDelete = dated.slice(keep)
+            for (const rel of toDelete) {
+              // delete release
+              await github.request('DELETE /repos/{owner}/{repo}/releases/{release_id}', {
+                owner: context.repo.owner, repo: context.repo.repo, release_id: rel.id
+              })
+              // delete tag ref if it exists
+              try {
+                await github.request('DELETE /repos/{owner}/{repo}/git/refs/{ref}', {
+                  owner: context.repo.owner, repo: context.repo.repo, ref: `tags/${rel.tag_name}`
+                })
+              } catch (e) {
+                core.info(`Tag ${rel.tag_name} already gone or not deletable: ${e.message}`)
+              }
+            }
