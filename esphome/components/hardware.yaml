@@ -30,7 +30,7 @@ light:
     pin: GPIO42
     num_leds: 16
     # The next line needs to sometimes be uncommented or sometimes commented depending on the exact version of esphome
-  #  rmt_channel: 0
+    rmt_channel: 0
     chipset: ws2812
     rgb_order: RGB
 
