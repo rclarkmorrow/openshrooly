@@ -15,10 +15,12 @@ time:
             } else {
               ESP_LOGI("time", "SNTP time sync attempted, but time not valid yet");
             }
-        - ds1307.write_time: { id: mcp7940n_time }
+        #- ds1307.write_time: { id: mcp7940n_time }
 
-  - platform: ds1307
-    i2c_id: bus_a
-    address: 0x6F
-    id: mcp7940n_time
-    timezone: "Etc/UTC"
+# Removing all references to mcp7940n_time
+# We really don't need to worry about an internal clock now that we're WIFI
+  # - platform: ds1307
+  #   i2c_id: bus_a
+  #   address: 0x6F
+  #   id: mcp7940n_time
+  #   timezone: "Etc/UTC"
