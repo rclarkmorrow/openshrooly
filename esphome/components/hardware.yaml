@@ -117,24 +117,46 @@ display:
     rotation: 90°
     model: 2.90inv2-r2
     full_update_every: 3600
+    update_interval: 60s
     auto_clear_enabled: false
     lambda: |-
-      // Draw background
-      it.image(0, 0, id(background), COLOR_OFF, COLOR_ON);
+      // Set up previous WiFi state variables to track state across refreshes
+      static bool has_drawn_background = false;
+      static String previous_ssid = "";
+      static String previous_ip = "";
 
-      // Hello World title
-      it.print(135, 20, id(font1), "www.openshrooly.com");
-
-      // WiFi / AP status
-      if (WiFi.isConnected()) {
-        // Connected as station
-        auto ssid = WiFi.SSID();
-        auto ip = WiFi.localIP().toString();
-        it.printf(135, 32, id(font1), "SSID: %s", ssid.c_str());
-        it.printf(135, 44, id(font1), "IP: %s", ip.c_str());
-      } else {
-        // AP fallback mode
-        auto ip = WiFi.softAPIP().toString();
-        it.print(135, 32, id(font1), "SSID: OpenShrooly");
-        it.printf(135, 44, id(font1), "Waiting to be configured");
+      // Draw static background once
+      if (!has_drawn_background) {
+        it.image(0, 0, id(background), COLOR_OFF, COLOR_ON);
+        it.printf(135, 20, id(font1), "www.openshrooly.com");
+        has_drawn_background = true;
       }
+
+      // Get current WiFi connection state, initialize variables
+      bool current_wifi_connected = WiFi.isConnected();
+      String current_ssid = "";
+      String current_ip = "";
+
+      if (current_wifi_connected) {
+        current_ssid = WiFi.SSID();
+        current_ip = WiFi.localIP().toString();
+      } else {
+        current_ssid = "OpenShrooly";
+        current_ip = "Waiting to be configured";
+      }
+
+      // Update SSID display if it has changed
+      if (previous_ssid != current_ssid) {
+        it.filled_rectangle(135, 32, 160, 12, COLOR_OFF);
+        it.printf(135, 32, id(font1), COLOR_ON, "SSID: %s", current_ssid.c_str());
+      }
+
+      // Update local IP display if it has changed
+      if (previous_ip != current_ip) {
+        it.filled_rectangle(135, 44, 160, 12, COLOR_OFF);
+        it.printf(135, 44, id(font1),  COLOR_ON, "IP: %s", current_ip.c_str());
+      }
+
+      // Update WiFi state variables
+      previous_ssid = current_ssid;
+      previous_ip = current_ip;
