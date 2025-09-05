@@ -31,17 +31,18 @@ light:
   - platform: monochromatic
     output: white_led_pwm
     id: white_led
-    internal: true
-
+    web_server:
+      sorting_group_id: grp_hidden
+      
   - platform: esp32_rmt_led_strip
     id: rgb_led_strip
-    internal: true
     pin: GPIO42
     num_leds: 16
-    # The next line needs to sometimes be uncommented or sometimes commented depending on the exact version of esphome
     rmt_channel: 0
     chipset: ws2812
     rgb_order: RGB
+    web_server:
+      sorting_group_id: grp_hidden
 
 switch:
   - platform: template
@@ -57,6 +58,15 @@ switch:
           uint8_t data[2] = {0x00, 0x00};
           id(bus_a).write(0x6C, data, 2);
           ESP_LOGI("humidifier", "TURN OFF: sent [0x00,0x00] to 0x6C, ok=%d");
+    web_server:
+      sorting_group_id: grp_hidden
+
+  - platform: factory_reset
+    id: do_factory_reset
+    internal: true
+    name: "Restart with Factory Default Settings"
+    web_server:
+      sorting_group_id: grp_hidden
 
 
 fan:
@@ -65,38 +75,102 @@ fan:
     id: air_exchange_fan
     internal: true
     speed_count: 100
+    web_server:
+      sorting_group_id: grp_hidden
 
 sensor:
+  #=======================================================================
+  # SECTION 1: Internal High-Frequency Sensors
+  # These publish their raw values every second to the public template sensors.
+  #=======================================================================
+
   - platform: sht4x
     i2c_id: bus_a
     temperature:
-      id: temp
-      name: "Temperature"
+      id: temperature
+      name: "Current Temperature"
+      internal: true
       web_server:
         sorting_group_id: grp_env
-        sorting_weight: 50
+      
+      on_value:
+        # Every second, publish the raw value to the public template sensor.
+        - sensor.template.publish:
+            id: temp_ha
+            state: !lambda 'return x;'
     humidity:
       id: humidity
-      name: "Humidity"
+      name: "Current Humidity"
+      internal: true
       web_server:
         sorting_group_id: grp_env
-        sorting_weight: 60
+      
       on_value:
-        - script.execute: humidity_control_manager        
+        # First, run the local script with every new value.
+        - script.execute: humidity_control_manager
+        # Then, publish the raw value to the public template sensor.
+        - sensor.template.publish:
+            id: humidity_ha
+            state: !lambda 'return x;'
     update_interval: 1s
 
   - platform: pulse_counter
     pin: GPIO14
-    id: fan_tach
-    name: "Air Exchange Fan Speed"
+    id: fan_tach_internal
+    name: "Current Air Exchange Fan Speed"
+    internal: true
     unit_of_measurement: "RPM"
     accuracy_decimals: 0
+    web_server:
+      sorting_group_id: grp_env          
     filters:
       - multiply: 0.5
     update_interval: 1s
+    on_value:
+      # Every second, publish the raw value to the public template sensor.
+      - sensor.template.publish:
+          id: fan_tach_ha
+          state: !lambda 'return x;'
+
+  #=======================================================================
+  # SECTION 2: Public (Smoothed) Template Sensors for Home Assistant
+  # These receive updates every second, but use FILTERS to decide when
+  # to forward a new state to Home Assistant.
+  #=======================================================================
+
+  - platform: template
+    name: "Temperature"
+    id: temp_ha
+    entity_category: "diagnostic"
+    accuracy_decimals: 1
+    unit_of_measurement: "°C"
     web_server:
-      sorting_group_id: grp_env
+      sorting_group_id: grp_hidden
+    filters:
+      - throttle: 30s
+
+  - platform: template
+    name: "Humidity"
+    id: humidity_ha
+    entity_category: "diagnostic"
+    accuracy_decimals: 1
+    unit_of_measurement: "%"
+    web_server:
+      sorting_group_id: grp_hidden
+    filters:
+      - throttle: 30s
+
+  - platform: template
+    name: "Air Exchange Fan Speed"
+    id: fan_tach_ha
+    entity_category: "diagnostic"
+    unit_of_measurement: "RPM"
+    accuracy_decimals: 0
+    web_server:
+      sorting_group_id: grp_hidden
       sorting_weight: 40
+    filters:
+      - delta: 25.0
 
 font:
   - file: 'fonts/spleen-6x12.bdf'
@@ -138,3 +212,24 @@ display:
         it.print(135, 32, id(font1), "SSID: OpenShrooly");
         it.printf(135, 44, id(font1), "Waiting to be configured");
       }
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO5
+      mode: INPUT_PULLUP
+      inverted: true
+    name: "Reset button"
+    on_click:
+      - min_length: 5s
+        max_length: 60s
+        then:
+          - rtttl.play: "beep:d=4,o=5,b=120:16a"          
+          - lambda: |-
+              
+              id(my_display).fill(COLOR_OFF);
+              id(my_display).print(30, 60, id(font1), "Factory Reset...");
+              id(my_display).print(30, 80, id(font1), "Please wait...");
+              id(my_display).update();              
+          - delay: 2s
+          - switch.turn_on: do_factory_reset

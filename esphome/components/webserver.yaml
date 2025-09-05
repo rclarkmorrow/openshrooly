@@ -1,6 +1,9 @@
 web_server:
   port: 80
   version: 3
+  include_internal: true
+  css_include: ../assets/esphome.css
+  js_include: ../assets/esphome.js
   sorting_groups:
     - id: grp_air
       name: "Air Exchange"
@@ -18,4 +21,7 @@ web_server:
     - id: grp_extras
       name: "Extras"
       sorting_weight: 100
+    - id: grp_hidden
+      name: "Hidden"
+      sorting_weight: 1000
 

@@ -161,6 +161,7 @@ text_sensor:
   - platform: template
     id: humidifier_fan_status
     name: "Humidifier Fan Status"
+    internal: true
     web_server:
       sorting_group_id: grp_humidity
       sorting_weight: 1   
@@ -168,6 +169,7 @@ text_sensor:
   - platform: template
     id: air_exchange_status
     name: "Air Exchange Status"
+    internal: true    
     web_server:
       sorting_group_id: grp_air
       sorting_weight: 1    
@@ -175,6 +177,7 @@ text_sensor:
   - platform: template
     id: lights_status
     name: "Lights Status"
+    internal: true
     web_server:
       sorting_group_id: grp_lights
       sorting_weight: 1    

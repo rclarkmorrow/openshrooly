@@ -14,18 +14,34 @@ then:
 
       // ---- publish status every second with countdown ----
       const int now_sec = t.hour * 3600 + t.minute * 60 + t.second;
+      
+      auto format_duration = [](int total_seconds) {
+          if (total_seconds < 60) {
+              return str_sprintf("%ds", total_seconds);
+          } else if (total_seconds < 3600) {
+              int minutes = total_seconds / 60;
+              int seconds = total_seconds % 60;
+              return str_sprintf("%dm %ds", minutes, seconds);
+          } else {
+              int hours = total_seconds / 3600;
+              int minutes = (total_seconds % 3600) / 60;
+              int seconds = total_seconds % 60;
+              return str_sprintf("%dh %dm %ds", hours, minutes, seconds);
+          }
+      };
+
       if (in_win) {
         int sec_left = end_min * 60 - now_sec;
         if (sec_left < 0) sec_left = 0;
-        id(lights_status).publish_state(str_sprintf("ON, %ds left", sec_left).c_str());
+        id(lights_status).publish_state(str_sprintf("ON, %s left", format_duration(sec_left).c_str()).c_str());
       } else if (now_min < start_min) {
         int sec_to_on = start_min * 60 - now_sec;
         if (sec_to_on < 0) sec_to_on = 0;
-        id(lights_status).publish_state(str_sprintf("OFF, %ds left", sec_to_on).c_str());
+        id(lights_status).publish_state(str_sprintf("OFF, %s left", format_duration(sec_to_on).c_str()).c_str());
       } else {
         int sec_to_tomorrow_on = ((24 * 60 - now_min) + start_min) * 60 - t.second;
         if (sec_to_tomorrow_on < 0) sec_to_tomorrow_on = 0;
-        id(lights_status).publish_state(str_sprintf("OFF — next ON in %ds", sec_to_tomorrow_on).c_str());
+        id(lights_status).publish_state(str_sprintf("OFF — next ON in %s", format_duration(sec_to_tomorrow_on).c_str()).c_str());
       }
 
       // ---- edge detection & one-shot transitions + logging ----

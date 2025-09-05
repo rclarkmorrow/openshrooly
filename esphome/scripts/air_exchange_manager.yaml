@@ -13,7 +13,21 @@ then:
             id(air_exchange_on_flag) = true;
             id(air_exchange_next_off_ts) = t.is_valid() ? (t.timestamp + run_sec) : 0;
 
-            String msg = "ON @" + String((int)id(air_exchange_speed).state) + "% for " + String(run_sec) + "s";
+            String time_str;
+            if (run_sec >= 3600) {
+              int hours = run_sec / 3600;
+              int minutes = (run_sec % 3600) / 60;
+              int seconds = run_sec % 60;
+              time_str = String(hours) + "h " + String(minutes) + "m " + String(seconds) + "s";
+            } else if (run_sec >= 60) {
+              int minutes = run_sec / 60;
+              int seconds = run_sec % 60;
+              time_str = String(minutes) + "m " + String(seconds) + "s";
+            } else {
+              time_str = String(run_sec) + "s";
+            }
+            
+            String msg = "ON @" + String((int)id(air_exchange_speed).state) + "% for " + time_str;
             id(air_exchange_status).publish_state(msg.c_str());
 
             // Only log on change
@@ -35,7 +49,22 @@ then:
                   auto t = id(sntp_time).now();
                   int remaining = id(air_exchange_next_off_ts) - (t.is_valid() ? t.timestamp : 0);
                   if (remaining < 0) remaining = 0;
-                  String msg = "ON @" + String((int)id(air_exchange_speed).state) + "%, " + String(remaining) + "s left";
+
+                  String time_str;
+                  if (remaining >= 3600) {
+                    int hours = remaining / 3600;
+                    int minutes = (remaining % 3600) / 60;
+                    int seconds = remaining % 60;
+                    time_str = String(hours) + "h " + String(minutes) + "m " + String(seconds) + "s";
+                  } else if (remaining >= 60) {
+                    int minutes = remaining / 60;
+                    int seconds = remaining % 60;
+                    time_str = String(minutes) + "m " + String(seconds) + "s";
+                  } else {
+                    time_str = String(remaining) + "s";
+                  }
+
+                  String msg = "ON @" + String((int)id(air_exchange_speed).state) + "%, " + time_str + " left";
                   id(air_exchange_status).publish_state(msg.c_str());
               - delay: 1s
 
@@ -54,7 +83,21 @@ then:
             id(air_exchange_on_flag) = false;
             id(air_exchange_next_on_ts) = t.is_valid() ? (t.timestamp + rest_sec) : 0;
 
-            String msg = "OFF, " + String(rest_sec) + "s left";
+            String time_str;
+            if (rest_sec >= 3600) {
+              int hours = rest_sec / 3600;
+              int minutes = (rest_sec % 3600) / 60;
+              int seconds = rest_sec % 60;
+              time_str = String(hours) + "h " + String(minutes) + "m " + String(seconds) + "s";
+            } else if (rest_sec >= 60) {
+              int minutes = rest_sec / 60;
+              int seconds = rest_sec % 60;
+              time_str = String(minutes) + "m " + String(seconds) + "s";
+            } else {
+              time_str = String(rest_sec) + "s";
+            }
+            
+            String msg = "OFF, " + time_str + " left";
             id(air_exchange_status).publish_state(msg.c_str());
 
             // Only log on change
@@ -77,6 +120,21 @@ then:
                   auto t = id(sntp_time).now();
                   int remaining = id(air_exchange_next_on_ts) - (t.is_valid() ? t.timestamp : 0);
                   if (remaining < 0) remaining = 0;
-                  String msg = "OFF, " + String(remaining) + "s left";
+
+                  String time_str;
+                  if (remaining >= 3600) {
+                    int hours = remaining / 3600;
+                    int minutes = (remaining % 3600) / 60;
+                    int seconds = remaining % 60;
+                    time_str = String(hours) + "h " + String(minutes) + "m " + String(seconds) + "s";
+                  } else if (remaining >= 60) {
+                    int minutes = remaining / 60;
+                    int seconds = remaining % 60;
+                    time_str = String(minutes) + "m " + String(seconds) + "s";
+                  } else {
+                    time_str = String(remaining) + "s";
+                  }
+                  
+                  String msg = "OFF, " + time_str + " left";
                   id(air_exchange_status).publish_state(msg.c_str());
               - delay: 1s
