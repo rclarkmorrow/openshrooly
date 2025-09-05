@@ -5,7 +5,7 @@ esphome:
   project:
     name: grahamsz.openshrooly
     version: 0.2.3
-
+#test comment
   on_boot:
     priority: -10
     then:

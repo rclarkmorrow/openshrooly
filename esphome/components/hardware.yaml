@@ -191,21 +191,29 @@ display:
     rotation: 90°
     model: 2.90inv2-r2
     full_update_every: 3600
+    update_interval: 60s
     auto_clear_enabled: false
     lambda: |-
-      // Draw background
-      it.image(0, 0, id(background), COLOR_OFF, COLOR_ON);
+      // Set up previous WiFi state variables to track state across refreshes
+      static bool has_drawn_background = false;
+      static String previous_ssid = "";
+      static String previous_ip = "";
 
-      // Hello World title
-      it.print(135, 20, id(font1), "www.openshrooly.com");
+      // Draw static background once
+      if (!has_drawn_background) {
+        it.image(0, 0, id(background), COLOR_OFF, COLOR_ON);
+        it.printf(135, 20, id(font1), "www.openshrooly.com");
+        has_drawn_background = true;
+      }
 
-      // WiFi / AP status
-      if (WiFi.isConnected()) {
-        // Connected as station
-        auto ssid = WiFi.SSID();
-        auto ip = WiFi.localIP().toString();
-        it.printf(135, 32, id(font1), "SSID: %s", ssid.c_str());
-        it.printf(135, 44, id(font1), "IP: %s", ip.c_str());
+      // Get current WiFi connection state, initialize variables
+      bool current_wifi_connected = WiFi.isConnected();
+      String current_ssid = "";
+      String current_ip = "";
+
+      if (current_wifi_connected) {
+        current_ssid = WiFi.SSID();
+        current_ip = WiFi.localIP().toString();
       } else {
         // AP fallback mode
         auto ip = WiFi.softAPIP().toString();
